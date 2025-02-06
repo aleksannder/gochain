@@ -12,6 +12,7 @@ type Block struct {
 	Data          []byte // Valuable information in the block
 	PrevBlockHash []byte // Hash of the previous block
 	Hash          []byte // Hash of the block
+	Nonce         int    // Nonce arbitrary number that can be used only once
 }
 
 func NewBlock(data string, prevBlockHash []byte) *Block {
@@ -21,7 +22,12 @@ func NewBlock(data string, prevBlockHash []byte) *Block {
 		PrevBlockHash: prevBlockHash,
 		Hash:          []byte{},
 	}
-	block.SetHash()
+
+	pow := NewProofOfWork(block)
+	nonce, hash := pow.Run()
+
+	block.Hash = hash[:]
+	block.Nonce = nonce
 	return block
 }
 
