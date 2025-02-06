@@ -12,6 +12,7 @@
 *.test
 gochain
 .idea/
+blockchain.db
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 

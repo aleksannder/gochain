@@ -2,8 +2,8 @@ package domain
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"strconv"
+	"encoding/gob"
+	"log"
 	"time"
 )
 
@@ -31,16 +31,26 @@ func NewBlock(data string, prevBlockHash []byte) *Block {
 	return block
 }
 
-func (b *Block) SetHash() {
+func (b *Block) Serialize() []byte {
+	var result bytes.Buffer
+	enc := gob.NewEncoder(&result)
 
-	// Converts Timestamp -> string -> byte array
-	timestamp := []byte(strconv.FormatInt(b.Timestamp, 10))
-	// Joins by creating new byte slices from the previous block hash, the data and the timestamp
-	headers := bytes.Join([][]byte{b.PrevBlockHash, b.Data, timestamp}, []byte{})
+	err := enc.Encode(b)
+	if err != nil {
+		log.Panic(err)
+	}
 
-	// Hashes the concatenated headers
-	hash := sha256.Sum256(headers)
+	return result.Bytes()
+}
 
-	// Adds the new hash
-	b.Hash = hash[:]
+func DeserializeBlock(data []byte) *Block {
+	var block Block
+
+	decoder := gob.NewDecoder(bytes.NewReader(data))
+	err := decoder.Decode(&block)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	return &block
 }
