@@ -6,11 +6,13 @@ import (
 	"github.com/boltdb/bolt"
 	"log"
 	"os"
+
 )
 
 const dbFile = "blockchain.db"
 const blocksBucket = "blocks"
 const genesisCoinbaseData = "Here lies the genesis block data"
+
 
 type Blockchain struct {
 	tip []byte
@@ -215,6 +217,15 @@ func (bc *Blockchain) MineBlock(transactions []*Transaction) {
 
 		return nil
 	})
+
+	if err != nil {
+		log.Panic(err)
+	}
+
+}
+
+func (bc *Blockchain) Iterator() *BlockchainIterator {
+	return &BlockchainIterator{bc.tip, bc.Db}
 }
 
 // Iterator funcs
@@ -245,4 +256,5 @@ func dbExists() bool {
 	}
 
 	return true
+
 }

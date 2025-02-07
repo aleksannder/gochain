@@ -67,4 +67,5 @@ func (b *Block) HashTransactions() []byte {
 	txHash = sha256.Sum256(bytes.Join(txHashes, []byte{}))
 
 	return txHash[:]
+
 }

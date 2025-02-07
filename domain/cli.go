@@ -36,7 +36,6 @@ func (cli *CLI) getBalance(address string) {
 	}
 
 	fmt.Printf("Balance of %s: %d\n", address, balance)
-}
 
 func (cli *CLI) Run() {
 	cli.validateArgs()
