@@ -27,6 +27,9 @@ type TXInput struct {
 	Signature []byte
 	PubKey    []byte
 }
+type TXOutputs struct {
+	Outputs []TXOutput
+}
 type Transaction struct {
 	ID   []byte
 	Vin  []TXInput
@@ -37,12 +40,17 @@ type Transaction struct {
 
 func NewCoinbaseTX(to, data string) *Transaction {
 	if data == "" {
-		data = fmt.Sprintf("Reward to %s", to)
+		randData := make([]byte, 20)
+		_, err := rand.Read(randData)
+		if err != nil {
+			log.Panic(err)
+		}
+
+		data = fmt.Sprintf("%x", randData)
 	}
 
 	txin := TXInput{[]byte{}, -1, nil, []byte(data)}
 	txout := NewTXOutput(subsidy, to)
-
 	tx := Transaction{nil, []TXInput{txin}, []TXOutput{*txout}}
 
 	tx.ID = tx.Hash()
@@ -50,7 +58,7 @@ func NewCoinbaseTX(to, data string) *Transaction {
 	return &tx
 }
 
-func NewUTXOTransaction(from, to string, amount int, bc *Blockchain) *Transaction {
+func NewUTXOTransaction(from, to string, amount int, set *UTXOSet) *Transaction {
 	var inputs []TXInput
 	var outputs []TXOutput
 
@@ -61,7 +69,7 @@ func NewUTXOTransaction(from, to string, amount int, bc *Blockchain) *Transactio
 
 	wallet := wallets.GetWallet(from)
 	pubKeyHash := util.HashPubKey(wallet.PublicKey)
-	acc, validOutputs := bc.FindSpendableOutputs(pubKeyHash, amount)
+	acc, validOutputs := set.FindSpendableOutputs(pubKeyHash, amount)
 
 	if acc < amount {
 		log.Panic("ERROR: Not enough funds")
@@ -86,7 +94,7 @@ func NewUTXOTransaction(from, to string, amount int, bc *Blockchain) *Transactio
 
 	tx := Transaction{nil, inputs, outputs}
 	tx.ID = tx.Hash()
-	bc.SignTransaction(&tx, wallet.PrivateKey)
+	set.Blockchain.SignTransaction(&tx, wallet.PrivateKey)
 
 	return &tx
 }
@@ -164,6 +172,30 @@ func (tx *Transaction) Serialize() []byte {
 	}
 
 	return encoded.Bytes()
+}
+
+func (outs TXOutputs) Serialize() []byte {
+	var buf bytes.Buffer
+
+	enc := gob.NewEncoder(&buf)
+	err := enc.Encode(outs)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	return buf.Bytes()
+}
+
+func DeserializeOutputs(data []byte) TXOutputs {
+	var outputs TXOutputs
+
+	dec := gob.NewDecoder(bytes.NewReader(data))
+	err := dec.Decode(&outputs)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	return outputs
 }
 
 func (tx *Transaction) String() string {

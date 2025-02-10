@@ -122,10 +122,15 @@ func (cli *CLI) Run() {
 
 func (cli *CLI) createBlockchain(address string) {
 	bc := CreateBlockchain(address)
-	err := bc.Db.Close()
-	if err != nil {
-		log.Panic(err)
-	}
+	defer func(Db *bolt.DB) {
+		err := Db.Close()
+		if err != nil {
+			log.Panic(err)
+		}
+	}(bc.Db)
+
+	UTXOSet := UTXOSet{bc}
+	UTXOSet.Reindex()
 	fmt.Println("Done")
 }
 
@@ -134,7 +139,8 @@ func (cli *CLI) getBalance(address string) {
 		log.Panic("ERROR: Address invalid")
 	}
 
-	bc := NewBlockchain(address)
+	bc := NewBlockchain()
+	UTXOSet := UTXOSet{bc}
 	defer func(Db *bolt.DB) {
 		err := Db.Close()
 		if err != nil {
@@ -145,7 +151,7 @@ func (cli *CLI) getBalance(address string) {
 	balance := 0
 	pubKeyHash := util.Base58Decode([]byte(address))
 	pubKeyHash = pubKeyHash[1 : len(pubKeyHash)-4]
-	UTXOs := bc.FindUTXO(pubKeyHash)
+	UTXOs := UTXOSet.FindUTXO(pubKeyHash)
 
 	for _, out := range UTXOs {
 		balance += out.Value
@@ -155,7 +161,7 @@ func (cli *CLI) getBalance(address string) {
 }
 
 func (cli *CLI) printChain() {
-	bc := NewBlockchain("")
+	bc := NewBlockchain()
 	defer func(Db *bolt.DB) {
 		err := Db.Close()
 		if err != nil {
@@ -184,7 +190,15 @@ func (cli *CLI) printChain() {
 }
 
 func (cli *CLI) send(from, to string, amount int) {
-	bc := NewBlockchain(from)
+	if !ValidateAddress(to) {
+		log.Panic("ERROR: Recipient Address invalid")
+	}
+	if !ValidateAddress(from) {
+		log.Panic("ERROR: Sender Address invalid")
+	}
+
+	bc := NewBlockchain()
+	UTXOSet := UTXOSet{bc}
 	defer func(Db *bolt.DB) {
 		err := Db.Close()
 		if err != nil {
@@ -192,10 +206,13 @@ func (cli *CLI) send(from, to string, amount int) {
 		}
 	}(bc.Db)
 
-	tx := NewUTXOTransaction(from, to, amount, bc)
-	bc.MineBlock([]*Transaction{tx})
+	tx := NewUTXOTransaction(from, to, amount, &UTXOSet)
+	cbTx := NewCoinbaseTX(from, "")
+	txs := []*Transaction{cbTx, tx}
 
-	fmt.Println("Success")
+	newBlock := bc.MineBlock(txs)
+	UTXOSet.Update(newBlock)
+	fmt.Printf("\n\n Success")
 }
 
 func (cli *CLI) listAddresses() {
