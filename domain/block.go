@@ -13,15 +13,17 @@ type Block struct {
 	PrevBlockHash []byte // Hash of the previous block
 	Hash          []byte // Hash of the block
 	Nonce         int    // Nonce arbitrary number that can be used only once
+	Height        int    // Used for calculating best height
 }
 
-func NewBlock(transactions []*Transaction, prevBlockHash []byte) *Block {
+func NewBlock(transactions []*Transaction, prevBlockHash []byte, height int) *Block {
 	block := &Block{
 		Timestamp:     time.Now().Unix(),
 		Transactions:  transactions,
 		PrevBlockHash: prevBlockHash,
 		Hash:          []byte{},
 		Nonce:         0,
+		Height:        height,
 	}
 
 	pow := NewProofOfWork(block)
