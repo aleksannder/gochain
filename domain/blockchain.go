@@ -33,7 +33,7 @@ func NewBlockchain(nodeID string) *Blockchain {
 	}
 
 	var tip []byte
-	db, err := bolt.Open(dbFile, 0600, nil)
+	db, err := bolt.Open(dbFile, 0660, nil)
 	if err != nil {
 		log.Panic(err)
 	}
@@ -172,7 +172,7 @@ func (bc *Blockchain) FindUTXO() map[string]TXOutputs {
 				UTXO[txID] = outs
 			}
 
-			if tx.IsCoinbase() == false {
+			if !tx.IsCoinbase() {
 				for _, in := range tx.Vin {
 					inTXId := hex.EncodeToString(in.Txid)
 					spentTXOs[inTXId] = append(spentTXOs[inTXId], in.Vout)
@@ -249,7 +249,7 @@ func (bc *Blockchain) FindTransaction(ID []byte) (Transaction, error) {
 		block := bci.Next()
 
 		for _, tx := range block.Transactions {
-			if bytes.Compare(tx.ID, ID) == 0 {
+			if bytes.Equal(tx.ID, ID) {
 				return *tx, nil
 			}
 		}

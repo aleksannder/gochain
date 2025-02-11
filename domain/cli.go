@@ -254,10 +254,10 @@ func (cli *CLI) send(from, to string, amount int, nodeID string, mineNow bool) {
 		newBlock := bc.MineBlock(txs)
 		UTXOSet.Update(newBlock)
 	} else {
-		SendTx(KnownNodes[0], tx)
+		SendTx(knownNodes[0], tx)
 	}
 
-	fmt.Printf("\n\n Success")
+	fmt.Printf("\n Success")
 }
 
 func (cli *CLI) listAddresses(nodeID string) {

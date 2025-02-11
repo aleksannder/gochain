@@ -10,15 +10,15 @@ import (
 	"net"
 )
 
-var nodeAddress string
-var miningAddress string
-var blocksInTransit [][]byte
-var mempool = make(map[string]Transaction)
-var KnownNodes = []string{"localhost:3000"}
-
 const protocol = "tcp"
 const nodeVersion = 1
 const commandLength = 12
+
+var nodeAddress string
+var miningAddress string
+var knownNodes = []string{"localhost:3000"}
+var blocksInTransit [][]byte
+var mempool = make(map[string]Transaction)
 
 type addr struct {
 	AddrList []string
@@ -59,10 +59,11 @@ type ver struct {
 func StartServer(nodeID, minerAddr string) {
 	nodeAddress = fmt.Sprintf("localhost:%s", nodeID)
 	miningAddress = minerAddr
-	ln, err := net.Listen(protocol, miningAddress)
+	ln, err := net.Listen(protocol, nodeAddress)
 	if err != nil {
 		log.Fatal(err)
 	}
+	fmt.Printf("Server listening on %s", miningAddress)
 	defer func(ln net.Listener) {
 		err := ln.Close()
 		if err != nil {
@@ -72,8 +73,8 @@ func StartServer(nodeID, minerAddr string) {
 
 	bc := NewBlockchain(nodeID)
 
-	if nodeAddress != KnownNodes[0] {
-		sendVersion(KnownNodes[0], bc)
+	if nodeAddress != knownNodes[0] {
+		sendVersion(knownNodes[0], bc)
 	}
 
 	for {
@@ -171,7 +172,7 @@ func handleVersion(req []byte, bc *Blockchain) {
 	}
 
 	if !nodeIsKnown(payload.AddrFrom) {
-		KnownNodes = append(KnownNodes, payload.AddrFrom)
+		knownNodes = append(knownNodes, payload.AddrFrom)
 	}
 }
 
@@ -268,6 +269,7 @@ func handleBlock(req []byte, bc *Blockchain) {
 	block := DeserializeBlock(blockData)
 
 	log.Printf("Received new block")
+
 	bc.AddBlock(block)
 
 	log.Printf("Added block %x\n", block.Hash)
@@ -279,16 +281,17 @@ func handleBlock(req []byte, bc *Blockchain) {
 		blocksInTransit = blocksInTransit[1:]
 	} else {
 		UTXOSet := UTXOSet{Blockchain: bc}
-		UTXOSet.Reindex()
+		UTXOSet.Update(block)
 	}
+
 }
 
-func handleTx(req []byte, bc *Blockchain) {
-	var buf bytes.Buffer
+func handleTx(request []byte, bc *Blockchain) {
+	var buff bytes.Buffer
 	var payload tx
 
-	buf.Write(req[commandLength:])
-	dec := gob.NewDecoder(&buf)
+	buff.Write(request[commandLength:])
+	dec := gob.NewDecoder(&buff)
 	err := dec.Decode(&payload)
 	if err != nil {
 		log.Panic(err)
@@ -298,8 +301,8 @@ func handleTx(req []byte, bc *Blockchain) {
 	tx := DeserializeTransaction(txData)
 	mempool[hex.EncodeToString(tx.ID)] = tx
 
-	if nodeAddress == KnownNodes[0] {
-		for _, node := range KnownNodes {
+	if nodeAddress == knownNodes[0] {
+		for _, node := range knownNodes {
 			if node != nodeAddress && node != payload.AddrFrom {
 				sendInv(node, "tx", [][]byte{tx.ID})
 			}
@@ -317,7 +320,7 @@ func handleTx(req []byte, bc *Blockchain) {
 			}
 
 			if len(txs) == 0 {
-				fmt.Print("All transactions are invalid")
+				fmt.Println("All transactions are invalid! Waiting for new ones...")
 				return
 			}
 
@@ -325,17 +328,17 @@ func handleTx(req []byte, bc *Blockchain) {
 			txs = append(txs, cbTx)
 
 			newBlock := bc.MineBlock(txs)
-			UTXOSet := UTXOSet{Blockchain: bc}
-			UTXOSet.Reindex()
+			UTXOSet := UTXOSet{bc}
+			UTXOSet.Update(newBlock)
 
-			fmt.Println("New block mined")
+			fmt.Println("New block is mined!")
 
 			for _, tx := range txs {
 				txID := hex.EncodeToString(tx.ID)
 				delete(mempool, txID)
 			}
 
-			for _, node := range KnownNodes {
+			for _, node := range knownNodes {
 				if node != nodeAddress {
 					sendInv(node, "block", [][]byte{newBlock.Hash})
 				}
@@ -359,8 +362,8 @@ func handleAddr(req []byte) {
 		log.Panic(err)
 	}
 
-	KnownNodes = append(KnownNodes, payload.AddrList...)
-	log.Printf("Known nodes updated, there are %d known nodes now\n", len(KnownNodes))
+	knownNodes = append(knownNodes, payload.AddrList...)
+	log.Printf("Known nodes updated, there are %d known nodes now\n", len(knownNodes))
 	requestBlocks()
 }
 
@@ -378,13 +381,13 @@ func sendData(address string, data []byte) {
 		log.Printf("%s isn't available\n. Error message: %x", address, err)
 		var updatedNodes []string
 
-		for _, node := range KnownNodes {
+		for _, node := range knownNodes {
 			if node != address {
 				updatedNodes = append(updatedNodes, node)
 			}
 		}
 
-		KnownNodes = updatedNodes
+		knownNodes = updatedNodes
 
 		return
 	}
@@ -443,13 +446,13 @@ func gobEncode(data interface{}) []byte {
 }
 
 func requestBlocks() {
-	for _, node := range KnownNodes {
+	for _, node := range knownNodes {
 		sendGetBlocks(node)
 	}
 }
 
 func nodeIsKnown(addr string) bool {
-	for _, node := range KnownNodes {
+	for _, node := range knownNodes {
 		if node == addr {
 			return true
 		}
